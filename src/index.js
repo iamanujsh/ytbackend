@@ -9,10 +9,6 @@ dotenv.config({
 
 connectDb()
   .then(() => {
-    app.on((error) => {
-      console.log(error);
-    });
-
     app.listen(process.env.PORT || 8000, () => {
       console.log(`Express Listing at port ${process.env.PORT}`);
     });
