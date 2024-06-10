@@ -2,6 +2,7 @@ import { asyncHandler } from "../utils/asynchHandler.js";
 import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import z from "zod";
+import jwt from "jsonwebtoken";
 
 const registerSchema = z.object({
   fullname: z.string().min(1, "fullname is required"),
@@ -182,8 +183,8 @@ const logoutUser = async (req, res) => {
   try {
     //removie cookies
     //reset refresh token
-    await User.findByIdAndUpdate(req.user._id, {
-      $set: { refreshToken: undefined },
+    const UserLogout = await User.findByIdAndUpdate(req.user._id, {
+      $set: { refreshToken: "" },
     });
 
     const options = {
@@ -195,10 +196,53 @@ const logoutUser = async (req, res) => {
       .status(200)
       .clearCookie("accessToken", options)
       .clearCookie("refreshToken", options)
-      .json({ message: "User Logged Out Successfully" });
+      .json({ message: "Logged Out Successfully", UserLogout });
   } catch (error) {
     console.log(error);
   }
 };
 
-export { registerUser, loginUser, logoutUser };
+const refreshAccessToken = async (req, res) => {
+  try {
+    const incomingRefreshToken =
+      req.cookies?.refreshToken || req.body.refreshToken;
+
+    if (!incomingRefreshToken) {
+      return res.status(401).json({ error: "Unauthorized Access" });
+    }
+
+    const decodeToken = jwt.verify(
+      incomingRefreshToken,
+      process.env.REFRESH_TOKEN_SECRET
+    );
+
+    const user = await User.findById(decodeToken?._id);
+
+    if (!user) {
+      return res.status(401).json("User Not Found");
+    }
+
+    if (incomingRefreshToken !== user?.refreshToken) {
+      return res.status(401).json({ error: "Refresh Token is expired", user });
+    }
+
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
+
+    return res
+      .status(200)
+      .cookie("acccessToken", accessToken, options)
+      .cookie("refreshToken", refreshToken, options)
+      .json({ accessToken, refreshToken, user });
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken };
