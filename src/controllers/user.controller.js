@@ -3,6 +3,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import z from "zod";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
 const registerSchema = z.object({
   fullname: z.string().min(1, "fullname is required"),
@@ -245,4 +246,114 @@ const refreshAccessToken = async (req, res) => {
   }
 };
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken };
+const changeCurrentPassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ error: "User Not Found" });
+    }
+
+    console.log(user);
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+    if (!isPasswordCorrect) {
+      return res.status(201).json({ error: "Password is Incorrect" });
+    }
+
+    user.password = newPassword;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json({ message: "Password SuccessFully Changed" });
+  } catch (error) {
+    return console.log(error);
+  }
+};
+
+const getCurrentUser = async (req, res) => {
+  return res
+    .json(200)
+    .json({ messagee: "User Fetched Successfully", user: req.user });
+};
+
+const updateAccountDetails = async (req, res) => {
+  try {
+    const { fullname, email } = req.body;
+    if (!fullname && !email) {
+      return res.status(201).json({ error: "All Field Are Required" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: { fullname, email },
+      },
+      { new: true }
+    ).select("-password");
+
+    return res.status(200).json({ user });
+  } catch (error) {
+    return res
+      .status(400)
+      .json({ error: "Somthing Went Wrong While Updating Details" });
+  }
+};
+
+const updateUserAvatar = async (req, res) => {
+  try {
+    const avatarLocalPath = req.file?.path;
+
+    if (!avatarLocalPath) {
+      res.status(201).json({ error: "Avatar Not Found" });
+    }
+
+    const avatarCloudinaryPath = await uploadOnCloudinary(avatarLocalPath);
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: { avatar: avatarCloudinaryPath.url },
+      },
+      { new: true }
+    );
+
+    return res.json({ user: user });
+  } catch (error) {}
+};
+
+const updateUserCover = async (req, res) => {
+  try {
+    const coverLocalPath = req.file?.path;
+
+    if (!coverLocalPath) {
+      res.status(201).json({ error: "Avatar Not Found" });
+    }
+
+    const coverCloudinaryPath = await uploadOnCloudinary(coverLocalPath);
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: { coverImage: coverCloudinaryPath.url },
+      },
+      { new: true }
+    );
+
+    return res.json({ user: user });
+  } catch (error) {}
+};
+
+export {
+  registerUser,
+  loginUser,
+  logoutUser,
+  refreshAccessToken,
+  changeCurrentPassword,
+  getCurrentUser,
+  updateAccountDetails,
+  updateUserAvatar,
+  updateUserCover,
+};
